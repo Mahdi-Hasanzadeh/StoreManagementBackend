@@ -107,8 +107,6 @@ export const getAllTransactions = expressAsyncHandler(async (req, res) => {
       .populate("category_id", "name type")
       .sort({ date: -1 });
 
-    console.log(transactions);
-
     res.json({ success: true, data: transactions });
   } catch (error) {
     console.log(error);

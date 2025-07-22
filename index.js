@@ -7,6 +7,9 @@ import errorHandler from "./Middleware/errorHandler.js";
 import userRouter from "./Routes/userRoute.js";
 import CategoryRouter from "./Routes/Category/CategoryRoute.js";
 import TransactionRouter from "./Routes/Transaction/TransactionRoute.js";
+import CustomerRouter from "./Routes/Customer/CustomerRoute.js";
+import ItemRouter from "./Routes/Item/ItemRoute.js";
+import SellInvoiceRouter from "./Routes/SellInvoice/SellInvoiceRoute.js";
 
 dotenv.config();
 
@@ -29,8 +32,10 @@ app.use(express.json());
 app.use("/api/user", userRouter);
 app.use("/api/category", CategoryRouter);
 app.use("/api/transaction", TransactionRouter);
-// app.use("/api/listing", listingRouter);
-// app.use("/api/category", MainCategoryRouter);
+app.use("/api/customer", CustomerRouter);
+app.use("/api/item", ItemRouter);
+app.use("/api/saleInvoice", SellInvoiceRouter);
+
 app.use(errorHandler);
 
 export default app;
