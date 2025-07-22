@@ -1,4 +1,4 @@
-import { CategoryModel } from "../../models/Category/CategoryModel.js"; // adjust path
+import { CategoryModel } from "../../Models/Category/CategoryModel.js"; // adjust path
 import expressAsyncHandler from "express-async-handler";
 
 // Create a new category
