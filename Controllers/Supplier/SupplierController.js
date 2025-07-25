@@ -1,5 +1,5 @@
 import { SupplierModel } from "../../Models/Supplier/SupplierModel.js";
-import { SellInvoiceModel } from "../../Models/SellInvoices/SellInvoice/SellInvoiceModel.js";
+import { PurchaseInvoiceModel } from "../../Models/PurchaseInvoices/PurchaseInvoiceModel.js";
 
 // Create a new supplier
 export const createSupplier = async (req, res) => {
@@ -111,7 +111,7 @@ export const deleteSupplier = async (req, res) => {
       });
     }
 
-    const isUsedInInvoice = await SellInvoiceModel.exists({
+    const isUsedInInvoice = await PurchaseInvoiceModel.exists({
       supplier: supplier._id,
     });
 

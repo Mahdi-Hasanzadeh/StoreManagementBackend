@@ -1,14 +1,14 @@
+import { PurchaseInvoiceModel } from "../../Models/PurchaseInvoices/PurchaseInvoiceModel.js";
+import { PurchaseInvoiceItemModel } from "../../Models/PurchaseInvoices/PurchaseInvoiceItemModel.js";
+import { PurchasePaymentModel } from "../../Models/PurchaseInvoices/PurchasePaymentModel.js";
+import { PurchaseItemModel } from "../../Models/Item/PurchaseItemModel.js";
+import { ItemModel } from "../../Models/Item/ItemModel.js";
 import mongoose from "mongoose";
-import { SellInvoiceModel } from "../../Models/SellInvoices/SellInvoice/SellInvoiceModel.js";
-import { SellInvoiceItemModel } from "../../Models/SellInvoices/SellInvoiceItem/SellInvoiceItemModel.js";
-import { CustomerPaymentModel } from "../../Models/SellInvoices/CustomerPayment/CustomerPayment.js";
 
-export const getAllInvoices = async (req, res) => {
+export const getAllPurchaseInvoices = async (req, res) => {
   try {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User is not authorized" });
+      return res.status(401).json({ success: false, message: "Authorized" });
     }
     const userId = req.user.id; // Authenticated user
 
@@ -34,17 +34,17 @@ export const getAllInvoices = async (req, res) => {
     }
 
     // Fetch invoices with customer populated, sorted by date
-    const invoices = await SellInvoiceModel.find(query)
+    const invoices = await PurchaseInvoiceModel.find(query)
       .sort({ createdAt: -1 })
       .populate({
-        path: "customer",
+        path: "supplier",
         match: customerMatch, // Apply name filter here
         select: "name phone", // Customize returned fields
       })
       .exec();
 
     // Filter out invoices with null customer (if match failed)
-    const filteredInvoices = invoices.filter((i) => i.customer !== null);
+    const filteredInvoices = invoices.filter((i) => i.supplier !== null);
 
     res.status(200).json({ success: true, data: filteredInvoices });
   } catch (error) {
@@ -53,7 +53,7 @@ export const getAllInvoices = async (req, res) => {
   }
 };
 
-export const createSellInvoice = async (req, res) => {
+export const createPurchaseInvoice = async (req, res) => {
   if (!req.user) {
     return res
       .status(401)
@@ -65,6 +65,8 @@ export const createSellInvoice = async (req, res) => {
   try {
     const { customer_id, date, description, items, paid_amount } = req.body;
     const user_id = req.user.id;
+
+    // console.log(req.body);
 
     // Validate minimal fields (you can do more validations if you want)
     if (
@@ -94,10 +96,10 @@ export const createSellInvoice = async (req, res) => {
     const remaining_amount = total - paid_amount;
 
     // 1. Create the invoice document
-    const invoice = await SellInvoiceModel.create(
+    const invoice = await PurchaseInvoiceModel.create(
       [
         {
-          customer: customer_id,
+          supplier: customer_id,
           total,
           paid_amount,
           remaining_amount,
@@ -108,7 +110,6 @@ export const createSellInvoice = async (req, res) => {
       ],
       { session }
     );
-
     // 2. Create invoice items documents
     const invoiceItems = items.map((item) => ({
       invoice: invoice[0]._id,
@@ -120,17 +121,32 @@ export const createSellInvoice = async (req, res) => {
       user: user_id,
     }));
 
-    await SellInvoiceItemModel.insertMany(invoiceItems, { session });
+    // Store the items in Purchase Invoice Item table
+    await PurchaseInvoiceItemModel.insertMany(invoiceItems, { session });
 
-    // 3. Create payment document (if paid_amount > 0)
+    // Store the items in Purchase Item table that act as Inventory
+    await PurchaseItemModel.insertMany(invoiceItems, { session });
+
+    // Update last_price in ItemModel
+    await Promise.all(
+      items.map((item) =>
+        ItemModel.findOneAndUpdate(
+          { _id: item.item_id, user: user_id },
+          { $set: { last_price: Number(item.unit_price) } },
+          { session, new: true }
+        )
+      )
+    );
+
+    // Create payment document (if paid_amount > 0)
     if (paid_amount > 0) {
-      await CustomerPaymentModel.create(
+      await PurchasePaymentModel.create(
         [
           {
             invoice: invoice[0]._id,
             amount: paid_amount,
             user: user_id,
-            // description: "Initial payment",
+            // description: "",
           },
         ],
         { session }
@@ -156,7 +172,7 @@ export const createSellInvoice = async (req, res) => {
   }
 };
 
-export const getSellInvoiceById = async (req, res) => {
+export const getPurchaseInvoiceById = async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -166,11 +182,11 @@ export const getSellInvoiceById = async (req, res) => {
     const invoiceId = req.params.id;
 
     // Fetch the invoice
-    const invoice = await SellInvoiceModel.findOne({
+    const invoice = await PurchaseInvoiceModel.findOne({
       _id: invoiceId,
       user: userId,
     }).populate({
-      path: "customer",
+      path: "supplier",
       select: "name phone",
     });
 
@@ -182,7 +198,7 @@ export const getSellInvoiceById = async (req, res) => {
     }
 
     // Fetch invoice items separately
-    const items = await SellInvoiceItemModel.find({
+    const items = await PurchaseInvoiceItemModel.find({
       invoice: invoice._id,
       user: userId,
     }).populate({
@@ -206,7 +222,7 @@ export const getSellInvoiceById = async (req, res) => {
   }
 };
 
-export const updateSellInvoice = async (req, res) => {
+export const updatePurchaseInvoice = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -214,6 +230,7 @@ export const updateSellInvoice = async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
+    const user_id = req.user.id;
     const invoiceId = req.params.id;
     const { customer_id, date, description, items = [] } = req.body;
 
@@ -226,7 +243,9 @@ export const updateSellInvoice = async (req, res) => {
     // Start Transaction
     session.startTransaction();
 
-    const invoice = await SellInvoiceModel.findById(invoiceId).session(session);
+    const invoice = await PurchaseInvoiceModel.findById(invoiceId).session(
+      session
+    );
     if (!invoice) {
       await session.abortTransaction();
       session.endSession();
@@ -242,9 +261,10 @@ export const updateSellInvoice = async (req, res) => {
     }, 0);
 
     // Get total paid from CustomerPayment
-    const payments = await CustomerPaymentModel.find({
+    const payments = await PurchasePaymentModel.find({
       invoice: invoiceId,
     }).session(session);
+
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
 
     if (total < totalPaid) {
@@ -256,7 +276,7 @@ export const updateSellInvoice = async (req, res) => {
     }
 
     // Update invoice fields
-    invoice.customer = customer_id;
+    invoice.supplier = customer_id;
     invoice.date = date;
     invoice.description = description || "";
     invoice.total = total;
@@ -266,7 +286,12 @@ export const updateSellInvoice = async (req, res) => {
     await invoice.save({ session });
 
     // Delete existing invoice items linked to this invoice
-    await SellInvoiceItemModel.deleteMany(
+    await PurchaseInvoiceItemModel.deleteMany(
+      { invoice: invoiceId, user: req.user.id },
+      { session }
+    );
+
+    await PurchaseItemModel.deleteMany(
       { invoice: invoiceId, user: req.user.id },
       { session }
     );
@@ -283,7 +308,20 @@ export const updateSellInvoice = async (req, res) => {
     }));
 
     // Insert new items
-    await SellInvoiceItemModel.insertMany(invoiceItems, { session });
+    await PurchaseInvoiceItemModel.insertMany(invoiceItems, { session });
+
+    await PurchaseItemModel.insertMany(invoiceItems, { session });
+
+    // Update last_price in ItemModel
+    await Promise.all(
+      items.map((item) =>
+        ItemModel.findOneAndUpdate(
+          { _id: item.item_id, user: user_id },
+          { $set: { last_price: Number(item.unit_price) } },
+          { session, new: true }
+        )
+      )
+    );
 
     // Commit transaction
     await session.commitTransaction();
@@ -303,7 +341,7 @@ export const updateSellInvoice = async (req, res) => {
   }
 };
 
-export const deleteSellInvoice = async (req, res) => {
+export const deletePurchaseInvoice = async (req, res) => {
   const session = await mongoose.startSession();
   try {
     if (!req.user) {
@@ -316,7 +354,7 @@ export const deleteSellInvoice = async (req, res) => {
     session.startTransaction();
 
     // Find invoice with user check
-    const invoice = await SellInvoiceModel.findOne({
+    const invoice = await PurchaseInvoiceModel.findOne({
       _id: invoiceId,
       user: userId,
     }).session(session);
@@ -329,21 +367,27 @@ export const deleteSellInvoice = async (req, res) => {
     }
 
     // Delete related invoice items
-    await SellInvoiceItemModel.deleteMany({
+    await PurchaseInvoiceItemModel.deleteMany({
+      invoice: invoiceId,
+      user: userId,
+    }).session(session);
+
+    await PurchaseItemModel.deleteMany({
       invoice: invoiceId,
       user: userId,
     }).session(session);
 
     // Delete related payments
-    await CustomerPaymentModel.deleteMany({
+    await PurchasePaymentModel.deleteMany({
       invoice: invoiceId,
       user: userId,
     }).session(session);
 
     // Delete the invoice itself
-    await SellInvoiceModel.deleteOne({ _id: invoiceId, user: userId }).session(
-      session
-    );
+    await PurchaseInvoiceModel.deleteOne({
+      _id: invoiceId,
+      user: userId,
+    }).session(session);
 
     await session.commitTransaction();
     session.endSession();
@@ -363,7 +407,7 @@ export const deleteSellInvoice = async (req, res) => {
   }
 };
 
-export const payRemaining = async (req, res) => {
+export const payPurchaseRemaining = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -388,7 +432,7 @@ export const payRemaining = async (req, res) => {
     }
 
     // Find invoice
-    const invoice = await SellInvoiceModel.findById(invoice_id).session(
+    const invoice = await PurchaseInvoiceModel.findById(invoice_id).session(
       session
     );
     if (!invoice) {
@@ -400,9 +444,10 @@ export const payRemaining = async (req, res) => {
     }
 
     // Sum total paid so far from payments collection
-    const payments = await CustomerPaymentModel.find({
+    const payments = await PurchasePaymentModel.find({
       invoice: invoice_id,
     }).session(session);
+
     const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
 
     const newPaid = paidSoFar + pay_amount;
@@ -428,7 +473,7 @@ export const payRemaining = async (req, res) => {
     }
 
     // Save the payment (positive or negative)
-    await CustomerPaymentModel.create(
+    await PurchasePaymentModel.create(
       [
         {
           invoice: invoice_id,
@@ -464,7 +509,7 @@ export const payRemaining = async (req, res) => {
   }
 };
 
-export const PaymentHistoryByInvoiceId = async (req, res) => {
+export const PaymentHistoryByPurchaseInvoiceId = async (req, res) => {
   try {
     // Check authentication
     if (!req.user) {
@@ -480,7 +525,7 @@ export const PaymentHistoryByInvoiceId = async (req, res) => {
     }
 
     // Fetch payments related to the invoice
-    const payments = await CustomerPaymentModel.find({
+    const payments = await PurchasePaymentModel.find({
       invoice: invoiceId,
     }).sort({ date: -1 }); // Optional: show latest first
 
@@ -497,7 +542,7 @@ export const PaymentHistoryByInvoiceId = async (req, res) => {
   }
 };
 
-export const getInvoiceDetailById = async (req, res) => {
+export const getPurchaseInvoiceDetailById = async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -507,11 +552,11 @@ export const getInvoiceDetailById = async (req, res) => {
     const invoiceId = req.params.id;
 
     // Get invoice with customer
-    const invoice = await SellInvoiceModel.findOne({
+    const invoice = await PurchaseInvoiceModel.findOne({
       _id: invoiceId,
       user: userId,
     }).populate({
-      path: "customer",
+      path: "supplier",
       select: "name phone",
     });
 
@@ -523,7 +568,7 @@ export const getInvoiceDetailById = async (req, res) => {
     }
 
     // Get invoice items with product details
-    const items = await SellInvoiceItemModel.find({
+    const items = await PurchaseInvoiceItemModel.find({
       invoice: invoice._id,
       user: userId,
     }).populate({
@@ -532,7 +577,7 @@ export const getInvoiceDetailById = async (req, res) => {
     });
 
     // Get payments made on this invoice
-    const payments = await CustomerPaymentModel.find({
+    const payments = await PurchasePaymentModel.find({
       invoice: invoice._id,
       user: userId,
     }).sort({ date: -1 });

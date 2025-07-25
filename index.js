@@ -11,7 +11,8 @@ import CustomerRouter from "./Routes/Customer/CustomerRoute.js";
 import ItemRouter from "./Routes/Item/ItemRoute.js";
 import SellInvoiceRouter from "./Routes/SellInvoice/SellInvoiceRoute.js";
 import authRoute from "./Routes/authRoute.js";
-import SupplierRoute from "./Routes/Supplier/supplierRoute.js";
+import SupplierRouter from "./Routes/Supplier/supplierRoute.js";
+import PurchaseInvoiceRouter from "./Routes/PurhcaseInvoice/PurchaseInvoiceRoute.js";
 dotenv.config();
 
 const app = express();
@@ -37,8 +38,11 @@ app.use("/api/category", CategoryRouter);
 app.use("/api/transaction", TransactionRouter);
 app.use("/api/customer", CustomerRouter);
 app.use("/api/item", ItemRouter);
-app.use("/api/supplier", SupplierRoute);
+app.use("/api/supplier", SupplierRouter);
+
+//Invoices
 app.use("/api/saleInvoice", SellInvoiceRouter);
+app.use("/api/purchaseInvoice", PurchaseInvoiceRouter);
 
 app.use(errorHandler);
 
