@@ -5,88 +5,96 @@ import jwt from "jsonwebtoken";
 
 // register a new user
 // @desc POST api/user/signup
-export const signupUser = asyncHandler(async (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: "Please provide credentials" });
+export const signupUser = async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "Please provide credentials" });
+    }
+
+    const userEmailAvailable = await userModel.findOne({ email });
+    if (userEmailAvailable) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
+
+    const usernameAvailable = await userModel.findOne({ username });
+    if (usernameAvailable) {
+      return res.status(400).json({ message: "Username is not available" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await userModel.create({
+      username,
+      email,
+      password: hashedPassword,
+    });
+
+    res.status(201).json({
+      username,
+      id: user._id,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Server Error" });
   }
-
-  const userEmailAvailable = await userModel.findOne({ email });
-  if (userEmailAvailable) {
-    return res.status(400).json({ message: "Email already in use" });
-  }
-
-  const usernameAvailable = await userModel.findOne({ username });
-  if (usernameAvailable) {
-    return res.status(400).json({ message: "Username is not available" });
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const user = await userModel.create({
-    username,
-    email,
-    password: hashedPassword,
-  });
-
-  res.status(201).json({
-    username,
-    id: user._id,
-  });
-});
+};
 
 // login a user
 // @desc POST api/user/signin
 export const signinUser = asyncHandler(async (req, res) => {
-  if (!req.body) {
-    return res.status(400).json({ message: "Please provide credentials" });
-  }
-  const { username, password } = req.body;
+  try {
+    if (!req.body) {
+      return res.status(400).json({ message: "Please provide credentials" });
+    }
+    const { username, password } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ message: "Please provide credentials" });
-  }
+    if (!username || !password) {
+      return res.status(400).json({ message: "Please provide credentials" });
+    }
 
-  // Find user by username
-  const user = await userModel.findOne({ username });
+    // Find user by username
+    const user = await userModel.findOne({ username });
 
-  if (!user) {
-    return res
-      .status(401)
-      .json({ message: "Username or password is incorrect" });
-  }
+    if (!user) {
+      return res
+        .status(400)
+        .json({ message: "Username or password is incorrect" });
+    }
 
-  // Compare password
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res
-      .status(401)
-      .json({ message: "Username or password is incorrect" });
-  }
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ message: "Username or password is incorrect" });
+    }
 
-  // Create JWT payload (minimize sensitive info)
-  const payload = {
-    user: {
+    // Create JWT payload (minimize sensitive info)
+    const payload = {
+      user: {
+        id: user._id,
+        username: user.username,
+        avatar: user.avatar || null, // fallback if avatar is missing
+      },
+    };
+
+    // Sign JWT token
+    const accessToken = jwt.sign(payload, process.env.SECRET_KEY, {
+      expiresIn: "24h", // Recommended to set expiration
+    });
+
+    // Send response JSON with token and user info
+    res.status(200).json({
+      accessToken,
       id: user._id,
       username: user.username,
-      avatar: user.avatar || null, // fallback if avatar is missing
-    },
-  };
-
-  // Sign JWT token
-  const accessToken = jwt.sign(payload, process.env.SECRET_KEY, {
-    expiresIn: "24h", // Recommended to set expiration
-  });
-
-  // Send response JSON with token and user info
-  res.status(200).json({
-    accessToken,
-    id: user._id,
-    username: user.username,
-    avatar: user.avatar || null,
-    favorites: user.favorites || [],
-    mobileNumber: user.mobileNumber || "",
-  });
+      avatar: user.avatar || null,
+      favorites: user.favorites || [],
+      mobileNumber: user.mobileNumber || "",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
 });
 
 // login with google account

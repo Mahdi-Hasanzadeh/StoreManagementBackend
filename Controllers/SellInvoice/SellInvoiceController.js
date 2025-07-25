@@ -14,6 +14,7 @@ export const getAllInvoices = async (req, res) => {
 
     // Base query
     const query = { user: userId };
+    console.log(query);
 
     // Filter: by invoice _id
     if (req.query.invoice_id) {

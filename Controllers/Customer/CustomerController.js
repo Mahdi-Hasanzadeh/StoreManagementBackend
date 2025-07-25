@@ -1,5 +1,6 @@
 import { CustomerModel } from "../../Models/Customer/CustomerModel.js";
 import expressAsyncHandler from "express-async-handler";
+import { SellInvoiceModel } from "../../Models/SellInvoices/SellInvoice/SellInvoiceModel.js";
 
 // Create a new customer
 export const createCustomer = expressAsyncHandler(async (req, res) => {
@@ -94,12 +95,13 @@ export const updateCustomer = expressAsyncHandler(async (req, res) => {
 });
 
 // Delete a customer by ID
-export const deleteCustomer = expressAsyncHandler(async (req, res) => {
+export const deleteCustomer = async (req, res) => {
   try {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User is not authorized" });
+      return res.status(401).json({
+        success: false,
+        message: "User is not authorized",
+      });
     }
 
     const customer = await CustomerModel.findOne({
@@ -108,19 +110,38 @@ export const deleteCustomer = expressAsyncHandler(async (req, res) => {
     });
 
     if (!customer) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Customer not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
     }
 
-    // Optional: check for references before deleting
+    // ❗ Check if customer is used in any sell invoice
+    const isUsedInInvoice = await SellInvoiceModel.exists({
+      customer: customer._id,
+    });
+
+    if (isUsedInInvoice) {
+      return res.status(400).json({
+        success: false,
+        message: "CustomerUsedInInvoice",
+      });
+    }
+
+    // Proceed with deletion
     await customer.deleteOne();
 
-    res.json({ success: true, message: "Customer deleted successfully" });
+    res.json({
+      success: true,
+      message: "Customer deleted successfully",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
-});
+};
 
 // Get all customers for the logged-in user
 export const getAllCustomers = expressAsyncHandler(async (req, res) => {

@@ -10,7 +10,8 @@ import TransactionRouter from "./Routes/Transaction/TransactionRoute.js";
 import CustomerRouter from "./Routes/Customer/CustomerRoute.js";
 import ItemRouter from "./Routes/Item/ItemRoute.js";
 import SellInvoiceRouter from "./Routes/SellInvoice/SellInvoiceRoute.js";
-
+import authRoute from "./Routes/authRoute.js";
+import SupplierRoute from "./Routes/Supplier/supplierRoute.js";
 dotenv.config();
 
 const app = express();
@@ -29,11 +30,14 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 
+app.use("/api/auth", authRoute);
 app.use("/api/user", userRouter);
+
 app.use("/api/category", CategoryRouter);
 app.use("/api/transaction", TransactionRouter);
 app.use("/api/customer", CustomerRouter);
 app.use("/api/item", ItemRouter);
+app.use("/api/supplier", SupplierRoute);
 app.use("/api/saleInvoice", SellInvoiceRouter);
 
 app.use(errorHandler);

@@ -1,5 +1,6 @@
 import { ItemModel } from "../../Models/Item/ItemModel.js";
 import expressAsyncHandler from "express-async-handler";
+import { SellInvoiceItemModel } from "../../Models/SellInvoices/SellInvoiceItem/SellInvoiceItemModel.js";
 
 // Create a new item
 export const createItem = expressAsyncHandler(async (req, res) => {
@@ -88,12 +89,14 @@ export const updateItem = expressAsyncHandler(async (req, res) => {
 });
 
 // Delete an item by ID
+
 export const deleteItem = expressAsyncHandler(async (req, res) => {
   try {
     if (!req.user) {
-      return res
-        .status(401)
-        .json({ success: false, message: "User is not authorized" });
+      return res.status(401).json({
+        success: false,
+        message: "User is not authorized",
+      });
     }
 
     const item = await ItemModel.findOne({
@@ -102,18 +105,36 @@ export const deleteItem = expressAsyncHandler(async (req, res) => {
     });
 
     if (!item) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Item not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
     }
 
-    // Optional: check for references before deleting
+    // ❗ Check if this item is used in any invoice
+    const isUsedInInvoice = await SellInvoiceItemModel.exists({
+      item: item._id,
+    });
 
+    if (isUsedInInvoice) {
+      return res.status(400).json({
+        success: false,
+        message: "ItemUsedInInvoice",
+      });
+    }
+
+    // If not used, proceed to delete
     await item.deleteOne();
 
-    res.json({ success: true, message: "Item deleted successfully" });
+    res.json({
+      success: true,
+      message: "Item deleted successfully",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 

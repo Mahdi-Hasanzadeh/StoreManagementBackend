@@ -1,5 +1,6 @@
 import { CategoryModel } from "../../Models/Category/CategoryModel.js"; // adjust path
 import expressAsyncHandler from "express-async-handler";
+import { TransactionModel } from "../../Models/Transaction/TransactionsModel.js";
 
 // Create a new category
 export const createCategory = expressAsyncHandler(async (req, res) => {
@@ -90,7 +91,7 @@ export const updateCategory = expressAsyncHandler(async (req, res) => {
 });
 
 // Delete category by id
-export const deleteCategory = expressAsyncHandler(async (req, res) => {
+export const deleteCategory = async (req, res) => {
   try {
     if (!req.user) {
       return res
@@ -104,22 +105,37 @@ export const deleteCategory = expressAsyncHandler(async (req, res) => {
       _id: categoryId,
       user: req.user.id,
     });
+
     if (!category) {
       return res
         .status(404)
         .json({ success: false, message: "Category not found" });
     }
 
-    // Optional: check if category is referenced (e.g., in transactions) before deleting
-    // If so, return an error
+    // ❗ Check if the category is used in any transaction
+    const isUsedInTransaction = await TransactionModel.exists({
+      category_id: category._id,
+    });
 
+    if (isUsedInTransaction) {
+      return res.status(400).json({
+        success: false,
+        message: "CategoryUsedInTransaction",
+      });
+    }
+
+    // If not used, proceed to delete
     await category.deleteOne();
 
-    res.json({ success: true, message: "Category deleted successfully" });
+    res.json({
+      success: true,
+      message: "Category deleted successfully",
+    });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
 
 // Get all categories for logged-in user
 export const getAllCategories = expressAsyncHandler(async (req, res) => {
