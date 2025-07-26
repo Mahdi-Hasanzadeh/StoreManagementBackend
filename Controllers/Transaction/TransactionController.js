@@ -12,8 +12,6 @@ export const createTransaction = expressAsyncHandler(async (req, res) => {
 
     const { amount, type, description, date, categoryId } = req.body;
 
-    console.log(req.body);
-
     const transaction = await TransactionModel.create({
       user: req.user.id,
       amount,
@@ -21,6 +19,8 @@ export const createTransaction = expressAsyncHandler(async (req, res) => {
       description,
       date,
       category_id: categoryId, // category _id
+      createdAt: date,
+      updatedAt: date,
     });
 
     res.status(201).json({ success: true, data: transaction });

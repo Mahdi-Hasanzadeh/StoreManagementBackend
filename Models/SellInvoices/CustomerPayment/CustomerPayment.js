@@ -28,7 +28,14 @@ const CustomerPaymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
+CustomerPaymentSchema.set("toJSON", {
+  transform: function (doc, ret) {
+    if (ret.amount !== undefined) {
+      ret.amount = parseFloat(ret.amount.toFixed(2));
+    }
+    return ret;
+  },
+});
 export const CustomerPaymentModel = mongoose.model(
   "Payment",
   CustomerPaymentSchema

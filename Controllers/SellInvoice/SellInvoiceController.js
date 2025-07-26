@@ -104,10 +104,14 @@ export const createSellInvoice = async (req, res) => {
           date,
           description: description || "",
           user: user_id,
+          createdAt: date,
+          updatedAt: date,
         },
       ],
       { session }
     );
+
+    // console.log(invoice);
 
     // 2. Create invoice items documents
     const invoiceItems = items.map((item) => ({
