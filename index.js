@@ -13,6 +13,7 @@ import SellInvoiceRouter from "./Routes/SellInvoice/SellInvoiceRoute.js";
 import authRoute from "./Routes/authRoute.js";
 import SupplierRouter from "./Routes/Supplier/supplierRoute.js";
 import PurchaseInvoiceRouter from "./Routes/PurhcaseInvoice/PurchaseInvoiceRoute.js";
+import DashboardRoute from "./Routes/Dashboard/DashboardRoute.js";
 dotenv.config();
 
 const app = express();
@@ -33,6 +34,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoute);
 app.use("/api/user", userRouter);
+app.use("/api/dashboard", DashboardRoute);
 
 app.use("/api/category", CategoryRouter);
 app.use("/api/transaction", TransactionRouter);
