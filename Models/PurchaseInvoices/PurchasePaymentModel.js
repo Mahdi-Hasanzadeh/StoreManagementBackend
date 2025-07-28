@@ -16,6 +16,7 @@ const PurchasePaymentSchema = new Schema(
     amount: {
       type: Number,
       required: true,
+      set: (v) => Math.round(v * 100) / 100,
     },
     paid_at: {
       type: Date,

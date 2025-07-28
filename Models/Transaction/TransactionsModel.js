@@ -15,6 +15,7 @@ const transactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+      set: (v) => Math.round(v * 100) / 100,
     },
     type: {
       type: String,

@@ -15,14 +15,17 @@ const purchaseInvoiceSchema = new mongoose.Schema(
     total: {
       type: Number,
       default: 0,
+      set: (v) => Math.round(v * 100) / 100,
     },
     paid_amount: {
       type: Number,
       default: 0,
+      set: (v) => Math.round(v * 100) / 100,
     },
     remaining_amount: {
       type: Number,
       default: 0,
+      set: (v) => Math.round(v * 100) / 100,
     },
     date: {
       type: Date,

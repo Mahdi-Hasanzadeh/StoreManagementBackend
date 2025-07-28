@@ -10,6 +10,7 @@ const CustomerPaymentSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+      set: (v) => Math.round(v * 100) / 100,
     },
     paid_at: {
       type: Date,
@@ -28,14 +29,7 @@ const CustomerPaymentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-CustomerPaymentSchema.set("toJSON", {
-  transform: function (doc, ret) {
-    if (ret.amount !== undefined) {
-      ret.amount = parseFloat(ret.amount.toFixed(2));
-    }
-    return ret;
-  },
-});
+
 export const CustomerPaymentModel = mongoose.model(
   "Payment",
   CustomerPaymentSchema

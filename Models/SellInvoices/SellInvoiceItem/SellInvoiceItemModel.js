@@ -19,10 +19,12 @@ const sellInvoiceItemSchema = new mongoose.Schema(
     unit_price: {
       type: Number,
       required: true,
+      set: (v) => Math.round(v * 100) / 100,
     },
     total: {
       type: Number,
       required: true,
+      set: (v) => Math.round(v * 100) / 100,
     },
     description: {
       type: String,

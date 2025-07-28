@@ -23,16 +23,19 @@ const PurchaseItemSchema = new Schema(
       type: Number,
       required: true,
       min: 1,
+      set: (v) => Math.round(v),
     },
     unit_price: {
       type: Number,
       required: true,
       min: 0,
+      set: (v) => Math.round(v * 100) / 100,
     },
     total: {
       type: Number,
       required: true,
       min: 0,
+      set: (v) => Math.round(v * 100) / 100,
     },
     description: {
       type: String,

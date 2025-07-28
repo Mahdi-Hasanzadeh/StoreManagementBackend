@@ -10,6 +10,7 @@ const itemSchema = new mongoose.Schema(
     last_price: {
       type: Number,
       default: null,
+      set: (v) => Math.round(v * 100) / 100,
     },
     user: {
       type: mongoose.Schema.Types.ObjectId,
