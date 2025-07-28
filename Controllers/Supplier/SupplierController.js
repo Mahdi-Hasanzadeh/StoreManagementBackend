@@ -180,3 +180,30 @@ export const getSupplierById = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const searchSuppliers = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User is not authorized" });
+    }
+
+    const { query } = req.query;
+
+    const filter = { user: req.user.id };
+
+    if (query) {
+      filter.name = { $regex: query, $options: "i" }; // Add filter only if query exists
+    }
+
+    const suppliers = await SupplierModel.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    res.json({ success: true, data: suppliers });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

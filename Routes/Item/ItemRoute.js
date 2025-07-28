@@ -7,6 +7,7 @@ import {
   deleteItem,
   getAllItems,
   getItemById,
+  searchItems,
   updateItem,
 } from "../../Controllers/Item/ItemController.js";
 
@@ -15,6 +16,7 @@ const Router = express.Router();
 //@desc POST api/category
 
 //private routes
+Router.get("/search", validateToken, searchItems);
 Router.post("/create/", validateToken, createItem);
 Router.put("/update/:id", validateToken, updateItem);
 Router.delete("/delete/:id", validateToken, deleteItem);

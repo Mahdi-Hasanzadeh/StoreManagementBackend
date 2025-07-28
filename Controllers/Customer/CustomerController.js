@@ -187,3 +187,30 @@ export const getCustomerById = expressAsyncHandler(async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+export const searchCustomers = expressAsyncHandler(async (req, res) => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User is not authorized" });
+    }
+
+    const { query } = req.query;
+
+    const filter = { user: req.user.id };
+
+    if (query) {
+      filter.name = { $regex: query, $options: "i" }; // Add filter only if query exists
+    }
+
+    const customers = await CustomerModel.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    res.json({ success: true, data: customers });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});

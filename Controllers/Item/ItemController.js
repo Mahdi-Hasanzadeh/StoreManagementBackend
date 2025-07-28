@@ -1,6 +1,7 @@
 import { ItemModel } from "../../Models/Item/ItemModel.js";
 import expressAsyncHandler from "express-async-handler";
 import { SellInvoiceItemModel } from "../../Models/SellInvoices/SellInvoiceItem/SellInvoiceItemModel.js";
+import { PurchaseInvoiceItemModel } from "../../Models/PurchaseInvoices/PurchaseInvoiceItemModel.js";
 
 // Create a new item
 export const createItem = expressAsyncHandler(async (req, res) => {
@@ -115,8 +116,18 @@ export const deleteItem = expressAsyncHandler(async (req, res) => {
     const isUsedInInvoice = await SellInvoiceItemModel.exists({
       item: item._id,
     });
-
     if (isUsedInInvoice) {
+      return res.status(400).json({
+        success: false,
+        message: "ItemUsedInInvoice",
+      });
+    }
+
+    const isUsedInPurchaseInvoice = await PurchaseInvoiceItemModel.exists({
+      item: item._id,
+    });
+
+    if (isUsedInPurchaseInvoice) {
       return res.status(400).json({
         success: false,
         message: "ItemUsedInInvoice",
@@ -178,6 +189,29 @@ export const getItemById = expressAsyncHandler(async (req, res) => {
     }
 
     res.json({ success: true, data: item });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+export const searchItems = expressAsyncHandler(async (req, res) => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User is not authorized" });
+    }
+
+    const search = req.query.query || "";
+
+    const items = await ItemModel.find({
+      user: req.user.id,
+      name: { $regex: search, $options: "i" }, // case-insensitive partial match
+    })
+      .limit(20)
+      .sort({ createdAt: -1 });
+
+    res.json(items); // Just return an array for AsyncSelect
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
