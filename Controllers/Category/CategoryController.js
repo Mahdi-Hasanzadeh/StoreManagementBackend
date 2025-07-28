@@ -1,6 +1,7 @@
 import { CategoryModel } from "../../Models/Category/CategoryModel.js"; // adjust path
 import expressAsyncHandler from "express-async-handler";
 import { TransactionModel } from "../../Models/Transaction/TransactionsModel.js";
+import mongoose from "mongoose";
 
 // Create a new category
 export const createCategory = expressAsyncHandler(async (req, res) => {
@@ -78,11 +79,27 @@ export const updateCategory = expressAsyncHandler(async (req, res) => {
       }
     }
 
+    // Detect if type is changing
+    const oldType = category.type;
+
     category.name = name ?? category.name;
     category.type = type ?? category.type;
     category.description = description ?? category.description;
 
     await category.save();
+
+    // Update transactions only if type changed
+    if (type && type !== oldType) {
+      const res = await TransactionModel.collection.updateMany(
+        {
+          category_id: new mongoose.Types.ObjectId(category._id),
+          user: new mongoose.Types.ObjectId(req.user.id),
+        },
+        {
+          $set: { type: type },
+        }
+      );
+    }
 
     res.json({ success: true, data: category });
   } catch (error) {

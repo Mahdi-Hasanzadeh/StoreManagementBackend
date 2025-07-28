@@ -96,7 +96,7 @@ export const getDashboardData = async (req, res) => {
       ]),
       TransactionModel.find({ user: userId })
         .populate("category_id", "name")
-        .sort({ updatedAt: -1 })
+        .sort({ createdAt: -1 })
         .limit(10),
       SellInvoiceModel.find({ user: userId })
         .populate("customer", "name phone createdAt")
