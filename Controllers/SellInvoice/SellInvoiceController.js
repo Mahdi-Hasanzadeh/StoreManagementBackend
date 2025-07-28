@@ -2,6 +2,57 @@ import mongoose from "mongoose";
 import { SellInvoiceModel } from "../../Models/SellInvoices/SellInvoice/SellInvoiceModel.js";
 import { SellInvoiceItemModel } from "../../Models/SellInvoices/SellInvoiceItem/SellInvoiceItemModel.js";
 import { CustomerPaymentModel } from "../../Models/SellInvoices/CustomerPayment/CustomerPayment.js";
+import { CustomerModel } from "../../Models/Customer/CustomerModel.js";
+
+// export const getAllInvoices = async (req, res) => {
+//   try {
+//     if (!req.user) {
+//       return res
+//         .status(401)
+//         .json({ success: false, message: "User is not authorized" });
+//     }
+//     const userId = req.user.id; // Authenticated user
+
+//     // Base query
+//     const query = { user: userId };
+
+//     // Filter: by invoice _id
+//     if (req.query.invoice_id) {
+//       query._id = req.query.invoice_id;
+//     }
+
+//     // Filter: by customer name (join via $lookup)
+//     let customerMatch = {};
+//     if (req.query.customer_name) {
+//       customerMatch = {
+//         name: { $regex: req.query.customer_name, $options: "i" },
+//       };
+//     }
+
+//     // Filter: remaining > 0
+//     if (req.query.only_remaining === "true") {
+//       query.remaining_amount = { $gt: 0 };
+//     }
+
+//     // Fetch invoices with customer populated, sorted by date
+//     const invoices = await SellInvoiceModel.find(query)
+//       .sort({ createdAt: -1 })
+//       .populate({
+//         path: "customer",
+//         match: customerMatch, // Apply name filter here
+//         select: "name phone", // Customize returned fields
+//       })
+//       .exec();
+
+//     // Filter out invoices with null customer (if match failed)
+//     const filteredInvoices = invoices.filter((i) => i.customer !== null);
+
+//     res.status(200).json({ success: true, data: filteredInvoices });
+//   } catch (error) {
+//     console.error("Error fetching invoices:", error);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
 
 export const getAllInvoices = async (req, res) => {
   try {
@@ -10,43 +61,60 @@ export const getAllInvoices = async (req, res) => {
         .status(401)
         .json({ success: false, message: "User is not authorized" });
     }
-    const userId = req.user.id; // Authenticated user
 
-    // Base query
+    const userId = req.user.id;
     const query = { user: userId };
 
-    // Filter: by invoice _id
+    // Filter: invoice ID
     if (req.query.invoice_id) {
       query._id = req.query.invoice_id;
     }
 
-    // Filter: by customer name (join via $lookup)
-    let customerMatch = {};
-    if (req.query.customer_name) {
-      customerMatch = {
-        name: { $regex: req.query.customer_name, $options: "i" },
-      };
-    }
-
-    // Filter: remaining > 0
+    // Filter: remaining amount > 0
     if (req.query.only_remaining === "true") {
       query.remaining_amount = { $gt: 0 };
     }
 
-    // Fetch invoices with customer populated, sorted by date
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Filter by customer name
+    if (req.query.customer_name) {
+      const matchingCustomers = await CustomerModel.find({
+        user: userId,
+        name: { $regex: req.query.customer_name, $options: "i" },
+      }).select("_id");
+
+      const customerIds = matchingCustomers.map((c) => c._id);
+      if (customerIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          total: 0,
+        });
+      }
+
+      query.customer = { $in: customerIds };
+    }
+
+    // Count total invoices matching query
+    const totalInvoices = await SellInvoiceModel.countDocuments(query);
+
+    // Fetch paginated invoices
     const invoices = await SellInvoiceModel.find(query)
       .sort({ createdAt: -1 })
-      .populate({
-        path: "customer",
-        match: customerMatch, // Apply name filter here
-        select: "name phone", // Customize returned fields
-      })
+      .skip(skip)
+      .limit(limit)
+      .populate("customer", "name")
       .exec();
 
-    // Filter out invoices with null customer (if match failed)
-    const filteredInvoices = invoices.filter((i) => i.customer !== null);
-
-    res.status(200).json({ success: true, data: filteredInvoices });
+    res.status(200).json({
+      success: true,
+      data: invoices,
+      total: totalInvoices,
+    });
   } catch (error) {
     console.error("Error fetching invoices:", error);
     res.status(500).json({ success: false, message: "Server error" });
@@ -63,7 +131,8 @@ export const createSellInvoice = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { customer_id, date, description, items, paid_amount } = req.body;
+    const { customer_id, date, description, items, paid_amount, total } =
+      req.body;
     const user_id = req.user.id;
 
     // Validate minimal fields (you can do more validations if you want)
@@ -78,14 +147,14 @@ export const createSellInvoice = async (req, res) => {
     }
 
     // Calculate total
-    let total = 0;
-    for (const item of items) {
-      const qty = Number(item.quantity);
-      const price = Number(item.unit_price);
-      if (qty <= 0) throw new Error("Quantity must be greater than zero");
-      if (price < 0) throw new Error("Unit price must be zero or greater");
-      total += qty * price;
-    }
+    // let total = 0;
+    // for (const item of items) {
+    //   const qty = Number(item.quantity);
+    //   const price = Number(item.unit_price);
+    //   if (qty <= 0) throw new Error("Quantity must be greater than zero");
+    //   if (price < 0) throw new Error("Unit price must be zero or greater");
+    //   total += qty * price;
+    // }
 
     if (paid_amount > total) {
       throw new Error("Paid amount cannot exceed total");
@@ -119,7 +188,8 @@ export const createSellInvoice = async (req, res) => {
       item: item.item_id,
       quantity: Number(item.quantity),
       unit_price: Number(item.unit_price),
-      total: Number(item.quantity) * Number(item.unit_price),
+      // total: Number(item.quantity) * Number(item.unit_price),
+      total: item.total,
       description: item.description || "",
       user: user_id,
     }));
@@ -219,7 +289,8 @@ export const updateSellInvoice = async (req, res) => {
     }
 
     const invoiceId = req.params.id;
-    const { customer_id, date, description, items = [] } = req.body;
+    const { customer_id, date, description, total, items = [] } = req.body;
+    console.log(req.body);
 
     if (!customer_id || !date || items.length === 0) {
       return res
@@ -238,12 +309,12 @@ export const updateSellInvoice = async (req, res) => {
     }
 
     // Calculate new total
-    const total = items.reduce((sum, item) => {
-      if (!item.item_id || !item.quantity || !item.unit_price) {
-        throw new Error("Invalid item in the list.");
-      }
-      return sum + item.quantity * item.unit_price;
-    }, 0);
+    // const total = items.reduce((sum, item) => {
+    //   if (!item.item_id || !item.quantity || !item.unit_price) {
+    //     throw new Error("Invalid item in the list.");
+    //   }
+    //   return sum + item.quantity * item.unit_price;
+    // }, 0);
 
     // Get total paid from CustomerPayment
     const payments = await CustomerPaymentModel.find({
@@ -281,7 +352,8 @@ export const updateSellInvoice = async (req, res) => {
       item: item.item_id,
       quantity: Number(item.quantity),
       unit_price: Number(item.unit_price),
-      total: Number(item.quantity) * Number(item.unit_price),
+      // total: Number(item.quantity) * Number(item.unit_price),
+      total: item.total,
       description: item.description || "",
       user: req.user.id,
     }));
