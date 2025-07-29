@@ -7,8 +7,10 @@ import {
   getAllInvoices,
   getInvoiceDetailById,
   getSellInvoiceById,
+  getUnpaidInvoices,
   PaymentHistoryByInvoiceId,
   payRemaining,
+  payRemainingForAll,
   updateSellInvoice,
 } from "../../Controllers/SellInvoice/SellInvoiceController.js";
 
@@ -26,5 +28,7 @@ Router.delete("/delete/:id", validateToken, deleteSellInvoice);
 Router.post("/payRemaining", validateToken, payRemaining);
 Router.get("/paymentHistory/:id", validateToken, PaymentHistoryByInvoiceId);
 Router.get("/invoiceDetails/:id", validateToken, getInvoiceDetailById);
+Router.get("/unpaid/:customerId", validateToken, getUnpaidInvoices);
+Router.post("/payRemainingForAll", validateToken, payRemainingForAll);
 
 export default Router;

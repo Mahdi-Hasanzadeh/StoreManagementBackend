@@ -7,8 +7,10 @@ import {
   getAllPurchaseInvoices,
   getPurchaseInvoiceById,
   getPurchaseInvoiceDetailById,
+  getUnpaidPurchaseInvoices,
   PaymentHistoryByPurchaseInvoiceId,
   payPurchaseRemaining,
+  payRemainingPurchaseForAll,
   updatePurchaseInvoice,
 } from "../../Controllers/PurchaseInvoice/PurchaseInvoiceController.js";
 
@@ -30,5 +32,7 @@ Router.get(
   PaymentHistoryByPurchaseInvoiceId
 );
 Router.get("/invoiceDetails/:id", validateToken, getPurchaseInvoiceDetailById);
+Router.get("/unpaid/:customerId", validateToken, getUnpaidPurchaseInvoices);
+Router.post("/payRemainingForAll", validateToken, payRemainingPurchaseForAll);
 
 export default Router;

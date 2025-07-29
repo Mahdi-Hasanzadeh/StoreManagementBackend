@@ -678,3 +678,152 @@ export const getPurchaseInvoiceDetailById = async (req, res) => {
     });
   }
 };
+
+export const getUnpaidPurchaseInvoices = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const userId = req.user.id;
+    const { customerId } = req.params;
+
+    // console.log(customerId);
+
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "customerId is required",
+      });
+    }
+
+    const unpaidInvoices = await PurchaseInvoiceModel.find({
+      user: userId,
+      supplier: customerId,
+      remaining_amount: { $gt: 0 },
+    })
+      .select("remaining_amount supplier")
+      .populate({
+        path: "supplier",
+        select: "name",
+      });
+
+    const totalRemainingAmount = unpaidInvoices.reduce(
+      (sum, invoice) => sum + invoice.remaining_amount,
+      0
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // invoices: unpaidInvoices,
+        totalUnpaidCount: unpaidInvoices.length,
+        totalRemainingAmount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching unpaid invoices:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const payRemainingPurchaseForAll = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.user.id;
+    const { customer_id, pay_amount, description } = req.body;
+
+    if (!customer_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "CustomerIdRequired" });
+    }
+
+    if (typeof pay_amount !== "number" || pay_amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "PayAmountNonZero",
+      });
+    }
+
+    let remainingToPay = pay_amount;
+
+    // Get all unpaid invoices for this customer sorted oldest to newest
+    const invoices = await PurchaseInvoiceModel.find({
+      user: userId,
+      supplier: customer_id,
+      remaining_amount: { $gt: 0 },
+    })
+      .sort({ createdAt: 1 }) // Oldest first
+      .session(session);
+
+    // 👉 Calculate the total remaining across all invoices
+    const totalRemaining = invoices.reduce(
+      (sum, invoice) => sum + invoice.remaining_amount,
+      0
+    );
+
+    // 👉 Validate
+    if (pay_amount > totalRemaining) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        message:
+          "Paid amount cannot exceed the customer's total remaining debt",
+      });
+    }
+
+    const paymentsToInsert = [];
+
+    for (const invoice of invoices) {
+      if (remainingToPay <= 0) break;
+
+      const remaining = invoice.remaining_amount;
+      const amountToPay = Math.min(remaining, remainingToPay);
+
+      // Prepare payment entry
+      paymentsToInsert.push({
+        invoice: invoice._id,
+        amount: amountToPay,
+        description: description || "",
+        user: req.user.id,
+      });
+
+      // Update invoice
+      invoice.paid_amount += amountToPay;
+      invoice.remaining_amount -= amountToPay;
+      await invoice.save({ session });
+
+      remainingToPay -= amountToPay;
+    }
+
+    if (paymentsToInsert.length > 0) {
+      await PurchasePaymentModel.insertMany(paymentsToInsert, { session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: "Payments applied successfully",
+      remainingUnpaid: remainingToPay,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("Batch Pay Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "PaymentFailed",
+      error: error.message,
+    });
+  }
+};

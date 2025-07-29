@@ -113,11 +113,6 @@ export const getDashboardData = async (req, res) => {
       (totalIncomeFromTransactions[0]?.total || 0) +
       (totalInvoicePaid[0]?.total || 0);
 
-    console.log(
-      totalIncomeFromTransactions[0]?.total,
-      totalInvoicePaid[0]?.total
-    );
-
     const totalExpense =
       (totalExpenseFromTransactions[0]?.total || 0) +
       (totalPurchaseInvoicePaid[0]?.total || 0);
@@ -127,11 +122,6 @@ export const getDashboardData = async (req, res) => {
     const todayIncome =
       (todayIncomeFromTransactions[0]?.total || 0) +
       (todayInvoicePaid[0]?.total || 0);
-
-    console.log(
-      todayIncomeFromTransactions[0]?.total,
-      todayInvoicePaid[0]?.total
-    );
 
     const todayExpense =
       (todayExpenseFromTransactions[0]?.total || 0) +
