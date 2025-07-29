@@ -75,6 +75,7 @@ export const signinUser = asyncHandler(async (req, res) => {
         id: user._id,
         username: user.username,
         avatar: user.avatar || null, // fallback if avatar is missing
+        role: user.role,
       },
     };
 
@@ -91,6 +92,7 @@ export const signinUser = asyncHandler(async (req, res) => {
       avatar: user.avatar || null,
       favorites: user.favorites || [],
       mobileNumber: user.mobileNumber || "",
+      role: user.role,
     });
   } catch (error) {
     res.status(500).json({ message: error.message || "Server Error" });
@@ -190,53 +192,83 @@ export const google = asyncHandler(async (req, res, next) => {
   }
 });
 
-// update user information
-export const updateUser = asyncHandler(async (req, res, next) => {
-  if (!req.user) {
-    res.status(401);
-    throw new Error("User is not authorized");
+export const updateUser = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "User is not authorized" });
+    }
+
+    const { username, email, password, newPassword, avatar, mobileNumber } =
+      req.body;
+
+    const user = await userModel.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "UserNotFound" });
+    }
+
+    // Check current password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "IncorrectPassword" });
+    }
+
+    // // Check if new username is taken (by another user)
+    // if (username && username !== user.username) {
+    //   const existingUsername = await userModel.findOne({ username });
+    //   if (
+    //     existingUsername &&
+    //     existingUsername._id.toString() !== req.params.id
+    //   ) {
+    //     return res.status(400).json({ message: "Username is already taken" });
+    //   }
+    // }
+
+    // // Check if new email is taken (by another user)
+    // if (email && email !== user.email) {
+    //   const existingEmail = await userModel.findOne({ email });
+    //   if (existingEmail && existingEmail._id.toString() !== req.params.id) {
+    //     return res.status(400).json({ message: "Email is already in use" });
+    //   }
+    // }
+
+    const updateData = {
+      username,
+      email,
+      avatar,
+      mobileNumber,
+    };
+
+    // Update password if provided and valid
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        return res
+          .status(400)
+          .json({ message: "New password must be at least 8 characters" });
+      }
+      updateData.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updatedUser = await userModel.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(400).json({ message: "Failed to update user" });
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    if (
+      error.message == "Email already in use" ||
+      error.message == "Username is not available"
+    ) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ message: "ServerError" });
   }
-
-  const { username, email, password, avatar, mobileNumber } = req.body;
-
-  const user = await userModel.findById(req.params.id);
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
-
-  // Build update object (exclude favorites)
-  const updateData = {
-    username,
-    email,
-    avatar,
-    mobileNumber,
-  };
-
-  // Hash password if provided
-  if (password) {
-    updateData.password = await bcrypt.hash(password, 10);
-  }
-
-  const updatedUser = await userModel.findByIdAndUpdate(
-    req.params.id,
-    { $set: updateData },
-    { new: true }
-  );
-
-  if (!updatedUser) {
-    res.status(400);
-    throw new Error("Failed to update user");
-  }
-
-  res.status(200).json({
-    id: updatedUser._id,
-    username: updatedUser.username,
-    email: updatedUser.email,
-    avatar: updatedUser.avatar,
-    mobileNumber: updatedUser.mobileNumber,
-  });
-});
+};
 
 // delete user account
 export const deleteUser = asyncHandler(async (req, res, next) => {
@@ -271,6 +303,6 @@ export const getUserInfo = asyncHandler(async (req, res, next) => {
     res.status(404);
     throw new Error("User is not found");
   }
-  const { username, email, mobileNumber, favorites } = user;
-  res.status(200).json({ username, email, mobileNumber, favorites });
+  const { username, email, mobileNumber } = user;
+  res.status(200).json({ username, email, mobileNumber });
 });

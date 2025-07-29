@@ -9,14 +9,15 @@ import {
 } from "../Controllers/userController.js";
 
 import { validateToken } from "../Middleware/validateToken.js";
+import { authorizeSuperAdmin } from "../Middleware/superadminMiddleware.js";
 
 const Router = express.Router();
 
-//@desc POST api/user/signup
+//@desc POST api/user/
 
 // register a user
 
-Router.post("/signup", signupUser);
+Router.post("/signup", validateToken, authorizeSuperAdmin, signupUser);
 Router.post("/signin", signinUser);
 Router.post("/google", google);
 Router.delete("/delete/:id", validateToken, deleteUser);
