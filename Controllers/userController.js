@@ -5,39 +5,6 @@ import jwt from "jsonwebtoken";
 
 // register a new user
 // @desc POST api/user/signup
-export const signupUser = async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ message: "Please provide credentials" });
-    }
-
-    const userEmailAvailable = await userModel.findOne({ email });
-    if (userEmailAvailable) {
-      return res.status(400).json({ message: "Email already in use" });
-    }
-
-    const usernameAvailable = await userModel.findOne({ username });
-    if (usernameAvailable) {
-      return res.status(400).json({ message: "Username is not available" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await userModel.create({
-      username,
-      email,
-      password: hashedPassword,
-    });
-
-    res.status(201).json({
-      username,
-      id: user._id,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message || "Server Error" });
-  }
-};
 
 // login a user
 // @desc POST api/user/signin
@@ -69,6 +36,14 @@ export const signinUser = asyncHandler(async (req, res) => {
         .json({ message: "Username or password is incorrect" });
     }
 
+    //Check account expiration
+    if (user.validUntil && new Date() > new Date(user.validUntil)) {
+      return res.status(400).json({
+        success: false,
+        message: "AccessExpired",
+      });
+    }
+
     // Create JWT payload (minimize sensitive info)
     const payload = {
       user: {
@@ -76,6 +51,7 @@ export const signinUser = asyncHandler(async (req, res) => {
         username: user.username,
         avatar: user.avatar || null, // fallback if avatar is missing
         role: user.role,
+        validUntil: user.validUntil,
       },
     };
 
@@ -303,6 +279,101 @@ export const getUserInfo = asyncHandler(async (req, res, next) => {
     res.status(404);
     throw new Error("User is not found");
   }
-  const { username, email, mobileNumber } = user;
-  res.status(200).json({ username, email, mobileNumber });
+  const { username, email, mobileNumber, validUntil } = user;
+  res.status(200).json({ username, email, mobileNumber, validUntil });
+});
+
+// Superadmin methods
+
+export const signupUser = async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "Please provide credentials" });
+    }
+
+    const userEmailAvailable = await userModel.findOne({ email });
+    if (userEmailAvailable) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
+
+    const usernameAvailable = await userModel.findOne({ username });
+    if (usernameAvailable) {
+      return res.status(400).json({ message: "Username is not available" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await userModel.create({
+      username,
+      email,
+      password: hashedPassword,
+    });
+
+    res.status(201).json({
+      username,
+      id: user._id,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Server Error" });
+  }
+};
+
+// get all users information
+export const getAllUsersInfo = asyncHandler(async (req, res, next) => {
+  if (!req.user) {
+    res.status(401);
+    throw new Error("User is not authorized");
+  }
+
+  // Optional: allow only admin/superadmin
+  if (req.user.role !== "admin" && req.user.role !== "superadmin") {
+    res.status(403);
+    throw new Error("Access denied");
+  }
+
+  const users = await userModel.find(
+    {},
+    "username email mobileNumber role validUntil createdAt"
+  );
+
+  console.log(users);
+
+  res.status(200).json({ success: true, data: users });
+});
+
+// update user's validUntil date
+export const updateValidUntil = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const { validUntil } = req.body;
+
+  if (!req.user) {
+    res.status(401);
+    throw new Error("User is not authorized");
+  }
+
+  // Optional: restrict to only superadmin
+  if (req.user.role !== "superadmin") {
+    res.status(403);
+    throw new Error("Access denied");
+  }
+
+  if (!validUntil || isNaN(Date.parse(validUntil))) {
+    res.status(400);
+    throw new Error("Valid date is required");
+  }
+
+  const user = await userModel.findById(id);
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  user.validUntil = new Date(validUntil);
+  await user.save();
+
+  res.status(200).json({
+    message: "validUntil updated successfully",
+    validUntil: user.validUntil,
+  });
 });

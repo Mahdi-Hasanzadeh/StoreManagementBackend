@@ -11,6 +11,12 @@ export const validateToken = asyncHandler((req, res, next) => {
         res.status(401);
         throw new Error("User is not authorized");
       }
+      const { user } = decoded;
+      if (!user.validUntil || new Date() > new Date(user.validUntil)) {
+        res.status(403);
+        throw new Error("AccessExpired");
+      }
+
       req.user = decoded.user;
       next();
     });
