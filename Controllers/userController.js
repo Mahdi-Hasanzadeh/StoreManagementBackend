@@ -57,7 +57,7 @@ export const signinUser = asyncHandler(async (req, res) => {
 
     // Sign JWT token
     const accessToken = jwt.sign(payload, process.env.SECRET_KEY, {
-      expiresIn: "1d", // Recommended to set expiration
+      expiresIn: "30d", // Recommended to set expiration
     });
 
     // Send response JSON with token and user info
