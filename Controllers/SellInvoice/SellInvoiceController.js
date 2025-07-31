@@ -588,7 +588,7 @@ export const getInvoiceDetailById = async (req, res) => {
       user: userId,
     }).populate({
       path: "customer",
-      select: "name phone",
+      select: "name number",
     });
 
     if (!invoice) {
