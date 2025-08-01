@@ -34,6 +34,7 @@ export const createSupplier = async (req, res) => {
 
     res.status(201).json({ success: true, data: supplier });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

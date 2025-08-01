@@ -2,6 +2,19 @@ import asyncHandler from "express-async-handler";
 import bcrypt from "bcrypt";
 import { userModel } from "../Models/User/userModel.js";
 import jwt from "jsonwebtoken";
+import { SupplierModel } from "../Models/Supplier/SupplierModel.js";
+import { ItemModel } from "../Models/Item/ItemModel.js";
+import { PurchaseItemModel } from "../Models/Item/PurchaseItemModel.js";
+import { CustomerModel } from "../Models/Customer/CustomerModel.js";
+import { CategoryModel } from "../Models/Category/CategoryModel.js";
+import { TransactionModel } from "../Models/Transaction/TransactionsModel.js";
+import { PurchaseInvoiceItemModel } from "../Models/PurchaseInvoices/PurchaseInvoiceItemModel.js";
+import { PurchaseInvoiceModel } from "../Models/PurchaseInvoices/PurchaseInvoiceModel.js";
+import { PurchasePaymentModel } from "../Models/PurchaseInvoices/PurchasePaymentModel.js";
+import { CustomerPaymentModel } from "../Models/SellInvoices/CustomerPayment/CustomerPayment.js";
+import { SellInvoiceModel } from "../Models/SellInvoices/SellInvoice/SellInvoiceModel.js";
+import { SellInvoiceItemModel } from "../Models/SellInvoices/SellInvoiceItem/SellInvoiceItemModel.js";
+import mongoose from "mongoose";
 
 // register a new user
 // @desc POST api/user/signup
@@ -377,3 +390,197 @@ export const updateValidUntil = asyncHandler(async (req, res, next) => {
     validUntil: user.validUntil,
   });
 });
+
+export const getBackup = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User is not authorized" });
+    }
+
+    const userId = req.user.id; // Make sure this is set by your auth middleware
+
+    const { password } = req.body;
+    if (!password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Password is required" });
+    }
+
+    // Get user including password hash
+    const user = await userModel.findById(userId).select("+password"); // make sure password field is selected
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "UserNotFound" });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ success: false, message: "InvalidPassword" });
+    }
+
+    const [
+      transactions,
+      suppliers,
+      customers,
+      categories,
+      items,
+      purchaseItems,
+      purchaseInvoices,
+      purchaseInvoiceItems,
+      purchasePayments,
+      customerPayments,
+      sellInvoices,
+      sellInvoiceItems,
+    ] = await Promise.all([
+      TransactionModel.find({ user: userId }),
+      SupplierModel.find({ user: userId }),
+      CustomerModel.find({ user: userId }),
+      CategoryModel.find({ user: userId }),
+      ItemModel.find({ user: userId }),
+      PurchaseItemModel.find({ user: userId }),
+      PurchaseInvoiceModel.find({ user: userId }),
+      PurchaseInvoiceItemModel.find({ user: userId }),
+      PurchasePaymentModel.find({ user: userId }),
+      CustomerPaymentModel.find({ user: userId }),
+      SellInvoiceModel.find({ user: userId }),
+      SellInvoiceItemModel.find({ user: userId }),
+    ]);
+
+    const backupData = {
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+        mobileNumber: user.mobileNumber,
+        // exclude password and other sensitive info here
+      },
+      transactions,
+      suppliers,
+      customers,
+      categories,
+      items,
+      purchaseItems,
+      purchaseInvoices,
+      purchaseInvoiceItems,
+      purchasePayments,
+      customerPayments,
+      sellInvoices,
+      sellInvoiceItems,
+      createdAt: new Date(),
+    };
+
+    res.setHeader("Content-Disposition", "attachment; filename=backup.json");
+    res.setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create backup." });
+  }
+};
+
+export const uploadBackup = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const userId = req.user.id;
+    if (!req.file || !req.file.buffer) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Password is required" });
+    }
+
+    // Get user including password hash
+    const user = await userModel.findById(userId).select("+password"); // make sure password field is selected
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "UserNotFound" });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res
+        .status(400)
+        .json({ success: false, message: "InvalidPassword" });
+    }
+
+    let backup;
+    try {
+      const jsonString = req.file.buffer.toString("utf-8");
+      backup = JSON.parse(jsonString);
+    } catch (parseErr) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid JSON format" });
+    }
+
+    if (!backup || !Array.isArray(backup.transactions)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid backup structure" });
+    }
+
+    console.log(backup);
+
+    await session.withTransaction(async () => {
+      // Step 1: Delete old data for the user
+      await Promise.all([
+        TransactionModel.deleteMany({ user: userId }, { session }),
+        SupplierModel.deleteMany({ user: userId }, { session }),
+        CustomerModel.deleteMany({ user: userId }, { session }),
+        CategoryModel.deleteMany({ user: userId }, { session }),
+        ItemModel.deleteMany({ user: userId }, { session }),
+        PurchaseItemModel.deleteMany({ user: userId }, { session }),
+        PurchaseInvoiceModel.deleteMany({ user: userId }, { session }),
+        PurchaseInvoiceItemModel.deleteMany({ user: userId }, { session }),
+        PurchasePaymentModel.deleteMany({ user: userId }, { session }),
+        CustomerPaymentModel.deleteMany({ user: userId }, { session }),
+        SellInvoiceModel.deleteMany({ user: userId }, { session }),
+        SellInvoiceItemModel.deleteMany({ user: userId }, { session }),
+      ]);
+
+      // Step 2: Insert backup data directly (no modifications)
+      await Promise.all([
+        TransactionModel.insertMany(backup.transactions, { session }),
+        SupplierModel.insertMany(backup.suppliers, { session }),
+        CustomerModel.insertMany(backup.customers, { session }),
+        CategoryModel.insertMany(backup.categories, { session }),
+        ItemModel.insertMany(backup.items, { session }),
+        PurchaseItemModel.insertMany(backup.purchaseItems, { session }),
+        PurchaseInvoiceModel.insertMany(backup.purchaseInvoices, { session }),
+        PurchaseInvoiceItemModel.insertMany(backup.purchaseInvoiceItems, {
+          session,
+        }),
+        PurchasePaymentModel.insertMany(backup.purchasePayments, { session }),
+        CustomerPaymentModel.insertMany(backup.customerPayments, { session }),
+        SellInvoiceModel.insertMany(backup.sellInvoices, { session }),
+        SellInvoiceItemModel.insertMany(backup.sellInvoiceItems, { session }),
+      ]);
+    });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Backup restored successfully" });
+  } catch (error) {
+    console.error("Upload failed:", error);
+    res.status(500).json({ success: false, message: "Restore failed" });
+  } finally {
+    await session.endSession();
+  }
+};

@@ -10,7 +10,6 @@ const supplierSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     phone: {
@@ -32,5 +31,8 @@ const supplierSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Compound unique index: ensures unique name per user
+supplierSchema.index({ user: 1, name: 1 }, { unique: true });
 
 export const SupplierModel = mongoose.model("Supplier", supplierSchema);
