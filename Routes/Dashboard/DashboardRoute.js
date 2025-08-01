@@ -2,7 +2,10 @@ import express from "express";
 
 import { validateToken } from "../../Middleware/validateToken.js";
 
-import { getDashboardData } from "../../Controllers/Dashboard/DashboardController.js";
+import {
+  getDashboardData,
+  getReport,
+} from "../../Controllers/Dashboard/DashboardController.js";
 
 const Router = express.Router();
 
@@ -10,5 +13,6 @@ const Router = express.Router();
 
 //private routes
 Router.get("/", validateToken, getDashboardData);
+Router.post("/report", validateToken, getReport);
 
 export default Router;
